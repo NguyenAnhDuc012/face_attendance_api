@@ -171,4 +171,96 @@ class LecturerSessionController extends Controller
             'data' => $session // Trả về session đã cập nhật
         ], 200);
     }
+
+    /**
+     * Lấy danh sách sinh viên và trạng thái điểm danh của 1 session.
+     */
+    public function getSessionRecords(Request $request, AttendanceSession $session)
+    {
+        // 1. Bảo mật
+        $lecturer = $request->user();
+        if ($session->schedule->course->lecturer_id !== $lecturer->id) {
+             return response()->json(['status' => false, 'message' => 'Không có quyền truy cập'], 403);
+        }
+
+        // 2. Nếu session chưa bắt đầu (pending), trả về mảng rỗng
+        if ($session->status == 'pending') {
+            return response()->json(['status' => true, 'data' => []], 200);
+        }
+
+        // 3. Lấy danh sách records và thông tin student liên quan
+        $records = $session->attendanceRecords()
+            ->with([
+                'student:id,full_name' 
+            ])
+            // Sắp xếp theo tên sinh viên
+            ->join('students', 'attendance_records.student_id', '=', 'students.id')
+            ->orderBy('students.full_name', 'asc')
+            ->select('attendance_records.*') // Tránh trùng lặp cột 'id'
+            ->get();
+
+        // 4. Định dạng lại dữ liệu
+        $formattedRecords = $records->map(function ($record) {
+            $studentIdentifier = $record->student->id ?? $record->student->email;
+            
+            return [
+                'record_id' => $record->id,
+                'student_id' => $record->student->id,
+                'student_name' => $record->student->full_name,
+                'student_code' => $studentIdentifier,
+                'status' => $record->status, // 'present', 'absent', 'late'
+                'check_in_time' => $record->check_in_time 
+                                    ? Carbon::parse($record->check_in_time)->format('H:i') 
+                                    : null,
+            ];
+        });
+
+        return response()->json(['status' => true, 'data' => $formattedRecords], 200);
+    }
+
+    /**
+     * Cập nhật thủ công trạng thái của một bản ghi điểm danh (record).
+     */
+    public function updateRecordStatus(Request $request, AttendanceRecord $record)
+    {
+        // 1. Bảo mật: Kiểm tra giảng viên này có sở hữu record này không
+        $lecturer = $request->user();
+        if ($record->session->schedule->course->lecturer_id !== $lecturer->id) {
+             return response()->json(['status' => false, 'message' => 'Không có quyền truy cập'], 403);
+        }
+
+        // 2. Validate input
+        $validator = Validator::make($request->all(), [
+            // Đảm bảo trạng thái gửi lên hợp lệ với DB
+            'status' => 'required|in:present,absent,late,excused', 
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
+        }
+
+        $newStatus = $request->status;
+
+        // 3. Cập nhật bản ghi
+        $record->status = $newStatus;
+        $record->source = 'lecturer'; // Ghi rõ là giảng viên sửa
+
+        // Cập nhật check_in_time dựa trên status
+        if (($newStatus == 'present' || $newStatus == 'late') && $record->check_in_time == null) {
+            // Nếu là 'có mặt' hoặc 'muộn' và chưa check-in -> set giờ
+            $record->check_in_time = Carbon::now('Asia/Ho_Chi_Minh');
+        } elseif ($newStatus == 'absent' || $newStatus == 'excused') {
+            // Nếu là 'vắng' -> xóa giờ check-in
+            $record->check_in_time = null;
+        }
+
+        $record->save();
+
+        // 4. Trả về thành công
+        return response()->json([
+            'status' => true,
+            'message' => 'Cập nhật trạng thái thành công!',
+            'data' => $record // Trả về record đã cập nhật
+        ], 200);
+    }
 }

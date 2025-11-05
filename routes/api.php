@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\admins\IntakeController;
@@ -52,7 +53,7 @@ Route::prefix('lecturer')->group(function () {
     // Các route cần xác thực
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [LecturerAuthController::class, 'logout']);
-        
+
         //ROUTE MỚI ĐỂ LẤY LỊCH HỌC HÔM NAY 
         Route::get('/today-schedule', [LecturerScheduleController::class, 'getTodaySchedule']);
         // danh sách lớp học phần của giảng viên
@@ -65,5 +66,9 @@ Route::prefix('lecturer')->group(function () {
         Route::post('/session/{session}/start', [LecturerSessionController::class, 'startSession']);
         // GIẢNG VIÊN BẤM NÚT KẾT THÚC ĐIỂM DANH
         Route::post('/session/{session}/end', [LecturerSessionController::class, 'endSession']);
+        // DANH SÁCH ĐIỂM DANH CÁC SV CỦA 1 BUỔI
+        Route::get('/session/{session}/records', [LecturerSessionController::class, 'getSessionRecords']);
+        // GV CẬP NHẬT TRẠNG THÁI ĐIỂM DANH CHO SV
+        Route::post('/record/{record}/update-status', [LecturerSessionController::class, 'updateRecordStatus']);
     });
 });

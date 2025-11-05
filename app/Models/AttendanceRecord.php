@@ -16,4 +16,13 @@ class AttendanceRecord extends Model
         'status',
         'source',
     ];
+
+    public function student()
+    {
+        return $this->belongsTo(Student::class);
+    }
+    public function session()
+    {
+        return $this->belongsTo(AttendanceSession::class, 'session_id');
+    }
 }

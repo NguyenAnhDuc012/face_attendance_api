@@ -54,6 +54,8 @@ class LecturerScheduleController extends Controller
 
         // Định dạng lại dữ liệu trả về cho gọn
         $formattedSchedules = $schedules->map(function ($schedule) {
+            $session = $schedule->attendanceSessions->first();
+            $sessionId = $session ? $session->id : null;
             
             // Lấy session đã được tải ở trên (chỉ có 1 session cho hôm nay)
             $session = $schedule->attendanceSessions->first();
@@ -69,6 +71,8 @@ class LecturerScheduleController extends Controller
 
             return [
                 'schedule_id' => $schedule->id,
+                'session_id' => $sessionId,
+                'course_id' => $schedule->course->id,
                 'subject_name' => $schedule->course->subject->name,
                 'room_name' => $schedule->room->name,
                 'class_name' => $schedule->course->studentClass->name,
@@ -82,7 +86,6 @@ class LecturerScheduleController extends Controller
 
         return response()->json([
             'status' => true,
-             'today' => $today->toDateString(), // 👈 hiển thị ngày hôm nay
             'data' => $formattedSchedules,
         ], 200);
     }
