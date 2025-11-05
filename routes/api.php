@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\admins\ScheduleController;
 use App\Http\Controllers\Api\lecturers\LecturerAuthController;
 use App\Http\Controllers\Api\lecturers\LecturerScheduleController;
 use App\Http\Controllers\Api\lecturers\LecturerCourseController;
+use App\Http\Controllers\Api\lecturers\LecturerSessionController;
 
 // admin
 Route::post('/register', [AuthController::class, 'register']);
@@ -58,5 +59,11 @@ Route::prefix('lecturer')->group(function () {
         Route::get('/courses-by-period', [LecturerCourseController::class, 'getCoursesByPeriod']);
         // LẤY CHI TIẾT CÁC BUỔI HỌC CỦA LỚP HỌC PHẦN
         Route::get('/course/{course}/sessions', [LecturerCourseController::class, 'getCourseSessions']);
+        // ===== CHI TIẾT BUỔI HỌC=====
+        Route::get('/session/{session}', [LecturerSessionController::class, 'getSessionDetails']);
+        // KHI GIẢNG VIÊN BẤM NÚT BẮT ĐẦU ĐIỂM DANH
+        Route::post('/session/{session}/start', [LecturerSessionController::class, 'startSession']);
+        // GIẢNG VIÊN BẤM NÚT KẾT THÚC ĐIỂM DANH
+        Route::post('/session/{session}/end', [LecturerSessionController::class, 'endSession']);
     });
 });
