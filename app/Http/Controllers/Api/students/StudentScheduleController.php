@@ -7,6 +7,8 @@ use App\Models\AttendanceSession;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Models\AttendanceRecord;
+use Illuminate\Support\Facades\Validator;
 
 class StudentScheduleController extends Controller
 {
@@ -19,25 +21,25 @@ class StudentScheduleController extends Controller
         $sessions = AttendanceSession::whereHas('schedule.course', function ($query) use ($student) {
             $query->where('class_id', $student->class_id);
         })
-        ->whereDate('session_date', $today)
-        ->with([
-            'schedule.course.subject:id,name',
-            'schedule.course.lecturer:id,full_name', // Lấy tên giảng viên
-            'schedule.room:id,name',
-            // Tải *chỉ* bản ghi điểm danh CỦA SINH VIÊN NÀY
-            'attendanceRecords' => function($query) use ($student) {
-                $query->where('student_id', $student->id);
-            }
-        ])
-        // Sắp xếp theo giờ bắt đầu
-        ->join('schedules', 'attendance_sessions.schedule_id', '=', 'schedules.id')
-        ->select('attendance_sessions.*')
-        ->orderBy('schedules.start_time', 'asc')
-        ->get();
+            ->whereDate('session_date', $today)
+            ->with([
+                'schedule.course.subject:id,name',
+                'schedule.course.lecturer:id,full_name', // Lấy tên giảng viên
+                'schedule.room:id,name',
+                // Tải *chỉ* bản ghi điểm danh CỦA SINH VIÊN NÀY
+                'attendanceRecords' => function ($query) use ($student) {
+                    $query->where('student_id', $student->id);
+                }
+            ])
+            // Sắp xếp theo giờ bắt đầu
+            ->join('schedules', 'attendance_sessions.schedule_id', '=', 'schedules.id')
+            ->select('attendance_sessions.*')
+            ->orderBy('schedules.start_time', 'asc')
+            ->get();
 
         // 2. Định dạng lại dữ liệu
         $formattedSchedules = $sessions->map(function ($session) {
-            
+
             // Lấy trạng thái của sinh viên (present, absent, late, ...)
             $myRecord = $session->attendanceRecords->first();
             $myStatus = $myRecord ? $myRecord->status : 'chưa có'; // Trạng thái của SV
@@ -56,5 +58,60 @@ class StudentScheduleController extends Controller
         });
 
         return response()->json(['status' => true, 'data' => $formattedSchedules], 200);
+    }
+
+    /**
+     * Sinh viên tự nộp trạng thái điểm danh (Thủ công).
+     */
+    public function submitAttendance(Request $request, AttendanceSession $session)
+    {
+        $student = $request->user();
+
+        // 1. Validate input
+        $validator = Validator::make($request->all(), [
+            'status' => 'required|in:present,late,absent,excused', // Cho phép 4 trạng thái
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
+        }
+
+        // 2. Kiểm tra trạng thái buổi học
+        if ($session->status !== 'active') {
+            return response()->json(['status' => false, 'message' => 'Đã hết thời gian điểm danh.'], 403);
+        }
+
+        // 3. Kiểm tra chế độ điểm danh (Bảo mật)
+        if ($session->attendance_mode !== 'manual') {
+            return response()->json(['status' => false, 'message' => 'Buổi học này không điểm danh thủ công.'], 403);
+        }
+
+        // 4. Tìm bản ghi của sinh viên này
+        $record = $session->attendanceRecords()
+            ->where('student_id', $student->id)
+            ->first();
+
+        if (!$record) {
+            return response()->json(['status' => false, 'message' => 'Bạn không có trong danh sách lớp này.'], 404);
+        }
+
+        // 5. Cập nhật bản ghi
+        $newStatus = $request->status;
+        $record->status = $newStatus;
+        $record->source = 'student'; // Nguồn là 'sinh viên'
+
+        // Cập nhật giờ check-in
+        if (($newStatus == 'present' || $newStatus == 'late') && $record->check_in_time == null) {
+            $record->check_in_time = Carbon::now('Asia/Ho_Chi_Minh');
+        } elseif ($newStatus == 'absent' || $newStatus == 'excused') {
+            $record->check_in_time = null;
+        }
+
+        $record->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Điểm danh thành công!',
+            'data' => $record
+        ]);
     }
 }

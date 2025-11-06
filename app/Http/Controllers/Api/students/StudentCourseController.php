@@ -106,6 +106,7 @@ class StudentCourseController extends Controller
                 'session_status' => $session->status, // 'pending', 'active', 'closed'
                 'my_attendance_status' => $myStatus,
                 'my_check_in_time' => $myCheckInTime,
+                'attendance_mode' => $session->attendance_mode, // 'manual' hoặc 'face_recognition_qr'
             ];
         });
 

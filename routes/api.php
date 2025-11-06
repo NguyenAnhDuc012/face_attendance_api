@@ -97,5 +97,7 @@ Route::prefix('student')->group(function () {
         Route::get('/profile', [StudentProfileController::class, 'getProfile']);
         // upload ảnh
         Route::post('/upload-face-image', [StudentProfileController::class, 'uploadFaceImage']);
+        // SV điểm danh
+        Route::post('/session/{session}/attend', [StudentScheduleController::class, 'submitAttendance']);
     });
 });
