@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\lecturers\LecturerSessionController;
 use App\Http\Controllers\Api\students\StudentAuthController;
 use App\Http\Controllers\Api\students\StudentScheduleController;
 use App\Http\Controllers\Api\students\StudentCourseController;
+use App\Http\Controllers\Api\students\StudentProfileController;
 
 
 // admin
@@ -82,7 +83,7 @@ Route::prefix('lecturer')->group(function () {
 // sinh viên
 Route::prefix('student')->group(function () {
     Route::post('/login', [StudentAuthController::class, 'login']);
-    
+
     // Thêm route logout (nên có)
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [StudentAuthController::class, 'logout']);
@@ -92,5 +93,9 @@ Route::prefix('student')->group(function () {
         Route::get('/my-courses', [StudentCourseController::class, 'getMyCoursesByPeriod']);
         // CÁC BUỔI HỌC CỦA 1 LỚP HỌC PHẦN
         Route::get('/course/{course}/sessions', [StudentCourseController::class, 'getCourseSessions']);
+        // thông tin các nhân
+        Route::get('/profile', [StudentProfileController::class, 'getProfile']);
+        // upload ảnh
+        Route::post('/upload-face-image', [StudentProfileController::class, 'uploadFaceImage']);
     });
 });

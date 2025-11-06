@@ -37,4 +37,14 @@ class Student extends Authenticatable
     {
         return $this->belongsTo(StudentClass::class, 'class_id');
     }
+
+    public function faceImages()
+    {
+        return $this->hasMany(FaceImage::class);
+    }
+
+    public function faceEmbeddings()
+    {
+        return $this->hasMany(FaceEmbedding::class);
+    }
 }
