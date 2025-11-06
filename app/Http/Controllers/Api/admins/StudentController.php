@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Hash;
 
 class StudentController extends Controller
 {
@@ -26,7 +25,6 @@ class StudentController extends Controller
             'password' => 'required|string|min:6',
         ]);
 
-        $validatedData['password'] = Hash::make($validatedData['password']);
 
         $student = Student::create($validatedData);
 
@@ -50,7 +48,6 @@ class StudentController extends Controller
         ]);
 
         if (!empty($validatedData['password'])) {
-            $validatedData['password'] = Hash::make($validatedData['password']);
         } else {
             unset($validatedData['password']);
         }

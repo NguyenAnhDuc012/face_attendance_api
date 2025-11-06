@@ -25,6 +25,11 @@ use App\Http\Controllers\Api\lecturers\LecturerScheduleController;
 use App\Http\Controllers\Api\lecturers\LecturerCourseController;
 use App\Http\Controllers\Api\lecturers\LecturerSessionController;
 
+// Sinh viên
+use App\Http\Controllers\Api\students\StudentAuthController;
+use App\Http\Controllers\Api\students\StudentScheduleController;
+
+
 // admin
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -70,5 +75,17 @@ Route::prefix('lecturer')->group(function () {
         Route::get('/session/{session}/records', [LecturerSessionController::class, 'getSessionRecords']);
         // GV CẬP NHẬT TRẠNG THÁI ĐIỂM DANH CHO SV
         Route::post('/record/{record}/update-status', [LecturerSessionController::class, 'updateRecordStatus']);
+    });
+});
+
+// sinh viên
+Route::prefix('student')->group(function () {
+    Route::post('/login', [StudentAuthController::class, 'login']);
+    
+    // Thêm route logout (nên có)
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('/logout', [StudentAuthController::class, 'logout']);
+        // Lấy lịch học hôm nay của sinh viên
+        Route::get('/today-schedule', [StudentScheduleController::class, 'getTodaySchedule']);
     });
 });
