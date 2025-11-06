@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\lecturers\LecturerSessionController;
 // Sinh viên
 use App\Http\Controllers\Api\students\StudentAuthController;
 use App\Http\Controllers\Api\students\StudentScheduleController;
+use App\Http\Controllers\Api\students\StudentCourseController;
 
 
 // admin
@@ -87,5 +88,7 @@ Route::prefix('student')->group(function () {
         Route::post('/logout', [StudentAuthController::class, 'logout']);
         // Lấy lịch học hôm nay của sinh viên
         Route::get('/today-schedule', [StudentScheduleController::class, 'getTodaySchedule']);
+        // 
+        Route::get('/my-courses', [StudentCourseController::class, 'getMyCoursesByPeriod']);
     });
 });
