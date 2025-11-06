@@ -88,7 +88,9 @@ Route::prefix('student')->group(function () {
         Route::post('/logout', [StudentAuthController::class, 'logout']);
         // Lấy lịch học hôm nay của sinh viên
         Route::get('/today-schedule', [StudentScheduleController::class, 'getTodaySchedule']);
-        // 
+        // DANH SÁCH LỚP HỌC PHẦN 
         Route::get('/my-courses', [StudentCourseController::class, 'getMyCoursesByPeriod']);
+        // CÁC BUỔI HỌC CỦA 1 LỚP HỌC PHẦN
+        Route::get('/course/{course}/sessions', [StudentCourseController::class, 'getCourseSessions']);
     });
 });
