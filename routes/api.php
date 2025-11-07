@@ -99,5 +99,8 @@ Route::prefix('student')->group(function () {
         Route::post('/upload-face-image', [StudentProfileController::class, 'uploadFaceImage']);
         // SV điểm danh
         Route::post('/session/{session}/attend', [StudentScheduleController::class, 'submitAttendance']);
+
+        // ĐIỂM DANH BẰNG KHUÔN MẶT 
+        Route::post('/session/{session}/attend-face', [StudentScheduleController::class, 'submitFaceAttendance']);
     });
 });

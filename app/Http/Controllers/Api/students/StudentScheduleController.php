@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Models\AttendanceRecord;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Http;
 
 class StudentScheduleController extends Controller
 {
@@ -113,5 +114,71 @@ class StudentScheduleController extends Controller
             'message' => 'Điểm danh thành công!',
             'data' => $record
         ]);
+    }
+
+    /**
+     * Sinh viên nộp ảnh "live" và QR token để điểm danh.
+     */
+    public function submitFaceAttendance(Request $request, AttendanceSession $session)
+    {
+        $student = $request->user();
+
+        // 1. Validate input (QR token và ảnh live)
+        $validator = Validator::make($request->all(), [
+            'qr_token' => 'required|string',
+            'live_image' => 'required|image|mimes:jpg,jpeg,png|max:2048',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['status' => false, 'errors' => $validator->errors()], 422);
+        }
+
+        // 2. Kiểm tra trạng thái buổi học
+        if ($session->status !== 'active') {
+            return response()->json(['status' => false, 'message' => 'Đã hết thời gian điểm danh.'], 403);
+        }
+
+        // 3. KIỂM TRA QR TOKEN (Chống giả mạo vị trí)
+        // (Đây là logic từ Bước 2, LecturerController, khi Giảng viên 'start' session)
+        if ($session->qr_token !== $request->qr_token || 
+            $session->qr_token_expires_at < Carbon::now()) {
+            return response()->json(['status' => false, 'message' => 'QR Code không hợp lệ hoặc đã hết hạn.'], 403);
+        }
+
+        // 4. GỌI DỊCH VỤ PYTHON ĐỂ SO SÁNH KHUÔN MẶT
+        // (Đây là dịch vụ AI Python bạn đã tạo ở Bước 1)
+        
+        $liveImagePath = $request->file('live_image')->getPathname();
+
+        // Lấy embedding đã lưu trong DB
+        $knownEmbedding = $student->faceEmbeddings()->first();
+        if (!$knownEmbedding) {
+             return response()->json(['status' => false, 'message' => 'Không tìm thấy dữ liệu khuôn mặt. Vui lòng tải ảnh profile.'], 404);
+        }
+
+        try {
+            // Gọi API Python (ví dụ: chạy trên cổng 5000)
+            $response = Http::post('http://127.0.0.1:5000/verify-face', [
+                'live_image_path' => $liveImagePath, // Hoặc gửi file
+                'known_embedding' => $knownEmbedding->embedding_vector, // Gửi vector
+            ]);
+
+            if (!$response->successful() || !$response->json('match')) {
+                return response()->json(['status' => false, 'message' => 'Khuôn mặt không khớp. Vui lòng thử lại.'], 401);
+            }
+            
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => 'Lỗi dịch vụ AI: ' . $e->getMessage()], 500);
+        }
+
+        // 5. NẾU KHỚP: Cập nhật bản ghi điểm danh
+        $record = $session->attendanceRecords()->where('student_id', $student->id)->first();
+        if ($record) {
+            $record->status = 'present'; // (Hoặc 'late' nếu bạn check giờ)
+            $record->source = 'system'; // 'system' (nhận diện)
+            $record->check_in_time = Carbon::now('Asia/Ho_Chi_Minh');
+            $record->save();
+        }
+
+        return response()->json(['status' => true, 'message' => 'Điểm danh thành công!']);
     }
 }
