@@ -9,7 +9,9 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Models\AttendanceRecord;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Http;      // Dùng để gọi Python
+use Illuminate\Support\Facades\Storage;  // Dùng để lấy path ảnh
+use Illuminate\Support\Facades\Log;
 
 class StudentScheduleController extends Controller
 {
@@ -116,7 +118,7 @@ class StudentScheduleController extends Controller
         ]);
     }
 
-    /**
+   /**
      * Sinh viên nộp ảnh "live" và QR token để điểm danh.
      */
     public function submitFaceAttendance(Request $request, AttendanceSession $session)
@@ -137,44 +139,63 @@ class StudentScheduleController extends Controller
             return response()->json(['status' => false, 'message' => 'Đã hết thời gian điểm danh.'], 403);
         }
 
-        // 3. KIỂM TRA QR TOKEN (Chống giả mạo vị trí)
-        // (Đây là logic từ Bước 2, LecturerController, khi Giảng viên 'start' session)
+        // 3. KIỂM TRA QR TOKEN
         if ($session->qr_token !== $request->qr_token || 
             $session->qr_token_expires_at < Carbon::now()) {
             return response()->json(['status' => false, 'message' => 'QR Code không hợp lệ hoặc đã hết hạn.'], 403);
         }
 
-        // 4. GỌI DỊCH VỤ PYTHON ĐỂ SO SÁNH KHUÔN MẶT
-        // (Đây là dịch vụ AI Python bạn đã tạo ở Bước 1)
-        
-        $liveImagePath = $request->file('live_image')->getPathname();
-
-        // Lấy embedding đã lưu trong DB
+        // 4. LẤY EMBEDDING GỐC
         $knownEmbedding = $student->faceEmbeddings()->first();
         if (!$knownEmbedding) {
              return response()->json(['status' => false, 'message' => 'Không tìm thấy dữ liệu khuôn mặt. Vui lòng tải ảnh profile.'], 404);
         }
 
+        // 5. GỌI DỊCH VỤ PYTHON
+        
+        // Đọc nội dung file và mã hóa Base64
+        $liveImageFile = $request->file('live_image');
+        $liveImageContent = file_get_contents($liveImageFile->getRealPath());
+        $liveImageBase64 = base64_encode($liveImageContent);
+
         try {
-            // Gọi API Python (ví dụ: chạy trên cổng 5000)
-            $response = Http::post('http://127.0.0.1:5000/verify-face', [
-                'live_image_path' => $liveImagePath, // Hoặc gửi file
+            Log::debug('[VerifyFace] Đang gọi AI Server cho student: ' . $student->id);
+
+            $response = Http::timeout(60) // Cho 60 giây để xử lý
+                ->post('http://127.0.0.1:5000/verify-face', [
+                'live_image_base64' => $liveImageBase64, // Gửi Base64
                 'known_embedding' => $knownEmbedding->embedding_vector, // Gửi vector
             ]);
 
-            if (!$response->successful() || !$response->json('match')) {
-                return response()->json(['status' => false, 'message' => 'Khuôn mặt không khớp. Vui lòng thử lại.'], 401);
+            Log::debug('[VerifyFace] Phản hồi từ AI Server: ' . $response->body());
+
+            if (!$response->successful()) {
+                $errorData = $response->json();
+                $errorMessage = $errorData['message'] ?? 'Lỗi dịch vụ AI';
+                return response()->json(['status' => false, 'message' => $errorMessage], 500);
+            }
+            
+            $match = $response->json('match');
+            $distance = (float) $response->json('distance');
+
+            if ($match == false) {
+                // Trả về thông báo lỗi chi tiết
+                return response()->json([
+                    'status' => false, 
+                    'message' => "Khuôn mặt không khớp. (Distance: $distance, Yêu cầu: < 1.1)"
+                ], 401);
             }
             
         } catch (\Exception $e) {
+            Log::error('[VerifyFace] Lỗi nghiêm trọng: ' . $e->getMessage());
             return response()->json(['status' => false, 'message' => 'Lỗi dịch vụ AI: ' . $e->getMessage()], 500);
         }
 
-        // 5. NẾU KHỚP: Cập nhật bản ghi điểm danh
+        // 6. NẾU KHỚP: Cập nhật bản ghi điểm danh
         $record = $session->attendanceRecords()->where('student_id', $student->id)->first();
         if ($record) {
-            $record->status = 'present'; // (Hoặc 'late' nếu bạn check giờ)
-            $record->source = 'system'; // 'system' (nhận diện)
+            $record->status = 'present';
+            $record->source = 'system';
             $record->check_in_time = Carbon::now('Asia/Ho_Chi_Minh');
             $record->save();
         }

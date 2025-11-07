@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use App\Models\FaceImage;
 use Symfony\Component\Process\Process;
-use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Exception\ProcessFailedException; //figbug
 
 class StudentProfileController extends Controller
 {
@@ -78,21 +78,38 @@ class StudentProfileController extends Controller
         // ===== 5. TẠO EMBEDDING MỚI (PHẦN CẬP NHẬT) =====
         try {
             $fullImagePath = Storage::disk('public')->path($path);
-            
-            // ===== THAY ĐỔI 2 DÒNG NÀY =====
-            // 1. Đường dẫn đến python.exe TRONG MÔI TRƯỜNG ẢO
-            $pythonExecutable = base_path('.venv/Scripts/python.exe');
+
+            // 1. Đường dẫn đến python TRONG MÔI TRƯỜNG ẢO (Linux)
+            $pythonExecutable = base_path('.venv/bin/python');
             // 2. Đường dẫn đến script Python
             $pythonScriptPath = base_path('scripts/create_embedding.py');
 
-            // 3. Cập nhật lệnh Process
-            $process = new Process([$pythonExecutable, $pythonScriptPath, $fullImagePath]);
-            // =================================
+           // Sửa lại lệnh 'new Process'
+            $process = new Process(
+                [$pythonExecutable, $pythonScriptPath, $fullImagePath],
+                null, // cwd (thư mục chạy)
+                [
+                    // Chỉ định thư mục home cho deepface
+                    'DEEPFACE_HOME' => '/home/duc' 
+                ]
+            );
             
-            $process->mustRun(); 
+            $process->setTimeout(300);
+
+            $exitCode = $process->run();
+            // fix bug
+            if ($exitCode > 0) { // Nếu exit code = 1 (hoặc khác 0) là có lỗi
+                // Ném ra lỗi với thông báo chi tiết TỪ PYTHON
+                throw new \Exception("Python script error: " . $process->getErrorOutput());
+            }
 
             $output = $process->getOutput();
             $embeddingData = json_decode($output, true);
+
+            // Bắt thêm lỗi: Nếu Python in ra Warning trước JSON
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new \Exception("Python script did not return valid JSON. Output: " . $output);
+            }
 
             if ($embeddingData['status'] == 'error') {
                 throw new \Exception($embeddingData['message']);
